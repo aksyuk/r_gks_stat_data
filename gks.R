@@ -1,5 +1,7 @@
 
 # TODO: add .doc parser from package "textreadr"
+# TODO: how to get rid of a console dialog? Can we find a match between year 
+#       books indexes and transform it to function arguments? 
 
 # load packages ----------------------------------------------------------------
 require("crayon")
@@ -239,6 +241,10 @@ getTableFromHtm <- function(ref) {
         sapply(getNodeSet(html_nodes, 
                           paste0("//table[", i_table, "]/tr")),
                function(x) {xpathSApply(x, "./td", xmlValue)})
+    
+    
+    # дальше разбор таблицы, по идее общий для doc, html, docx .................
+    
     # how much cells in a row depends of the row type         
     row_len <- sapply(list_this_table, length)
     
