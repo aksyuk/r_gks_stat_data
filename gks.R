@@ -8,8 +8,9 @@ require("crayon")                 # colored console messages
 require("RCurl")                  # loading URLs
 require("XML")                    # parsing html
 require("xml2")                   # parsing docx
-require("tools")                  # 
+# require("tools")                  # 
 library("broman")                 # hex to decimal convertion
+library("BMS")                    # hex to binary convertion: hex2bin()
 
 # init -------------------------------------------------------------------------
 # url of the data host
@@ -330,22 +331,88 @@ getTableFromDoc <- function(word_doc) {
     # remove link to temp file
     unlink(tmpf)
     
-    # find FIB base in binary doc (starts with 0xA5EC, 1472 bytes length)
+    # find FIB in binary doc (starts with 0xA5EC, 1472 bytes length)
     # source: http://b2xtranslator.sourceforge.net/howtos/How_to_retrieve_text_from_a_binary_doc_file.pdf
-    a5_pos <- which(doc_bin == "a5")
-    ec_pos <- which(doc_bin == "ec")
+    pos_1b <- which(doc_bin == "a5")
+    pos_2b <- which(doc_bin == "ec")
     # little endian encoding means than bytes go in reverse order
-    FIB_base_pos <- ec_pos[ec_pos %in% (a5_pos - 1)]
-    FIB_base <- doc_bin[FIB_base_pos:(FIB_base_pos + 1472 + 1)]
+    FIB_base_pos <- pos_2b[pos_2b %in% (pos_1b - 1)]
+    # FIB base length is 32 bytes
+    FIB_base <- doc_bin[FIB_base_pos:(FIB_base_pos + 32 - 1)]
+    
+    # extract nFIB, 2 bytes after FIB start
+    nFIB <- paste0("0x", paste0(rev(doc_bin[(FIB_base_pos + 2):(FIB_base_pos + 3)]), 
+                                collapse = ""))
+    nFibs <- c(0x00c1, 0x00d9, 0x0101, 0x010c, 0x0112)
+    cbRgFcLcbs <- c("005d", "006c", "0088", "00a4", "00b7")
+    cbRgFcLcb <- cbRgFcLcbs[nFibs == as.numeric(nFIB)]
+    
+    # extract FibRgFcLcb -- part of the FIB
+    pos_1b <- which(doc_bin == substr(cbRgFcLcb, 3, 4))
+    pos_2b <- which(doc_bin == substr(cbRgFcLcb, 1, 2))
+    cbRgFcLcb_pos <- pos_2b[pos_2b %in% (pos_1b - 1)]
+    cbRgFcLcb_pos <- cbRgFcLcb_pos[cbRgFcLcb_pos > (FIB_base_pos + 32)][1]
+    FibRgFcLcb <- doc_bin[(cbRgFcLcb_pos + 2):(cbRgFcLcb_pos + 2 - 1 +
+                                                   as.numeric(paste0("0x", cbRgFcLcb)))]
+    
+    pos_1b <- which(doc_bin == "00")
+    pos_2b <- which(doc_bin == "16")
+    cslw_pos <- pos_2b[pos_2b %in% (pos_1b - 1)]
+    cslw_pos <- cslw_pos[cslw_pos > (FIB_base_pos + 32)][1]
+    FibRgLw97 <- doc_bin[(cslw_pos + 2):(cslw_pos + 2 + 88 - 1)]
+    
+    # number of CPs in the main document
+    ccpText <- as.numeric(paste0("0x", paste0(rev(FibRgLw97[13:16]), 
+                                              collapse = "")))
+    # number of CPs in the footnote subdocument
+    ccpFtn <- as.numeric(paste0("0x", paste0(rev(FibRgLw97[17:20]), 
+                                             collapse = "")))
+    # number of CPs in the header subdocument
+    ccpHdd <- as.numeric(paste0("0x", paste0(rev(FibRgLw97[21:24]), 
+                                             collapse = "")))
+    # number of CPs in the comment subdocument
+    ccpAtn <- as.numeric(paste0("0x", paste0(rev(FibRgLw97[29:32]), 
+                                             collapse = "")))
+    # number of CPs in the endnote subdocument
+    ccpEdn <- as.numeric(paste0("0x", paste0(rev(FibRgLw97[33:36]), 
+                                             collapse = "")))
+    # number of CPs in the textbox subdocument of the main document
+    ccpTxbx <- as.numeric(paste0("0x", paste0(rev(FibRgLw97[37:40]), 
+                                             collapse = "")))
+    # number of CPs in the textbox subdocument of the header
+    ccpHdrTxbx <- as.numeric(paste0("0x", paste0(rev(FibRgLw97[41:44]), 
+                                              collapse = "")))
+    
+    
+    
     
     # searching for a piece table
-    #  read file character position (FC), 32 bytes long, at offset 0x01A2
-    hex2dec(paste0(rev(FIB_base[(hex2dec(0x01A2) + 1):(hex2dec(0x01A2) + 4)]),
-                   collapse = ""))
+    # 16 bitsat position 0x000A sets a name of file stream
+    pos <- 0x000A + 1
+    if (hex2bin(paste0("0x", FIB_base[pos]))[7] == 1) {
+        table_stream_name <- "1Table"
+    } else {
+        table_stream_name <- "0Table"
+    }
+    #  read file character position (FC), 32 bytes long, at offset 0x01A6
+    pos <- 0x01A6 + 1
+    table_pos <- hex2dec(paste0("0x", paste0(rev(FIB_base[pos:(pos + 3)]),
+                                             collapse = "")))
+    #  read length of the table (lcb), 32 bytes long, at offset 0x01A2
+    pos <- 0x01A2 + 1
+    table_len <- hex2dec(paste0("0x", paste0(rev(FIB_base[pos:(pos + 3)]),
+                                             collapse = "")))
+    # read table file stream
+    xTable <- doc_bin[table_pos:(table_pos + table_len - 1)]
     
-    #  read length of the table (lcb), 32 bytes long, at offset 0x01A6
-    
-    
+    i_pos <- 1
+    pos_of_02 <- which(xTable[i_pos:table_len] == 2)[1]
+    while (!is.na(pos_of_02)) {
+        xTable_part <- xTable[pos_of_02:table_len]
+        as.numeric(paste0("0x", paste0(rev(xTable_part[2:5]), collapse = "")))
+        # i_pos <- 
+    }
+
     
     
     cell_end <- c("12", "f0")
