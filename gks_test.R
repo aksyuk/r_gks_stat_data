@@ -61,3 +61,10 @@ str(glb_dataGKS)
 head(glb_dataGKS$data)
 tail(glb_dataGKS$data)
 str(glb_dataGKS$data)
+
+# test 02: get data from doc table ---------------------------------------------
+#
+my_url <- "http://www.gks.ru/bgd/regl/B15_14p/IssWWW.exe/Stg/d02/10-01.doc"
+my_url <- "http://www.gks.ru/bgd/regl/B17_14p/IssWWW.exe/Stg/d01/04-05.doc"
+glb_dataGKS <- loadGKSData(my_url)
+

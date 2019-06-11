@@ -4,12 +4,12 @@
 #       books indexes and transform it to function arguments? 
 
 # load packages ----------------------------------------------------------------
-require("crayon")
-require("RCurl")
-require("XML")
-require("xml2")
-require("tools")
-# require("textreadr")
+require("crayon")                 # colored console messages
+require("RCurl")                  # loading URLs
+require("XML")                    # parsing html
+require("xml2")                   # parsing docx
+require("tools")                  # 
+library("broman")                 # hex to decimal convertion
 
 # init -------------------------------------------------------------------------
 # url of the data host
@@ -310,6 +310,76 @@ getTableFromHtm <- function(ref) {
 
 
 # get tables from doc ==========================================================
+getTableFromDoc <- function(word_doc) {
+    
+    #! debug
+    word_doc <- my_url
+    
+    # create temp links for docx file
+    tmpf <- tempfile()
+    
+    # download to temp destfile
+    download.file(word_doc, tmpf)
+    
+    # read doc file as binary to vector, where each element is a BYTE, 
+    #  coded with hex number
+    doc_bin <- file(tmpf, "rb")
+    doc_bin <- readBin(doc_bin, raw(), n = file.info(tmpf)$size, 
+                       endian = "little")
+    
+    # remove link to temp file
+    unlink(tmpf)
+    
+    # find FIB base in binary doc (starts with 0xA5EC, 1472 bytes length)
+    # source: http://b2xtranslator.sourceforge.net/howtos/How_to_retrieve_text_from_a_binary_doc_file.pdf
+    a5_pos <- which(doc_bin == "a5")
+    ec_pos <- which(doc_bin == "ec")
+    # little endian encoding means than bytes go in reverse order
+    FIB_base_pos <- ec_pos[ec_pos %in% (a5_pos - 1)]
+    FIB_base <- doc_bin[FIB_base_pos:(FIB_base_pos + 1472 + 1)]
+    
+    # searching for a piece table
+    #  read file character position (FC), 32 bytes long, at offset 0x01A2
+    hex2dec(paste0(rev(FIB_base[(hex2dec(0x01A2) + 1):(hex2dec(0x01A2) + 4)]),
+                   collapse = ""))
+    
+    #  read length of the table (lcb), 32 bytes long, at offset 0x01A6
+    
+    
+    
+    
+    cell_end <- c("12", "f0")
+    sec_symb <- grep(c(cell_end[1]), FIB)
+    fst_symb <- grep(c(cell_end[2]), FIB)
+    paste0(FIB[fst_symb[fst_symb %in% (sec_symb - 1)]],
+           FIB[sec_symb[sec_symb %in% (fst_symb + 1)]])
+    
+    # find FIB base in binary doc (starts with 0xA5EC, 1472 bytes length)
+    a5_pos <- which(doc_bin == "a5")
+    ec_pos <- which(doc_bin == "ec")
+    FIB_base_pos <- ec_pos[ec_pos %in% (a5_pos - 1)]
+    FIB_base <- doc_bin[FIB_base_pos:(FIB_base_pos + 1472 + 1)]
+    # little endian encoding means than bytes go in reverse order
+    FIB_base <- FIB_base[seq(length(FIB_base), 1, -1)]
+    
+    FIB_base[which(FIB_base == "a5"):(which(FIB_base == "a5") - 1)]
+    
+    
+    
+    
+    
+
+    
+    doc_bin[]
+    
+    
+    
+    
+        
+}
+
+
+# get tables from docx =========================================================
 getTableFromDocx <- function(word_doc) {
     # create temp links for docx file
     tmpd <- tempdir()
