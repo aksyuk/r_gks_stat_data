@@ -310,6 +310,25 @@ getTableFromHtm <- function(ref) {
     }
 
 
+# find sequence position in bytes string
+# little endian encoding means than bytes go in reverse order
+findSeqPos <- function(seq_vec, txt_vec) {
+    
+    i_pos <- 1
+    patt <- seq_vec[i_pos]
+    res_pos <- which(txt_vec == patt)
+    
+    while (i_pos < length(seq_vec)) {
+        i_pos <- i_pos + 1
+        
+        patt <- seq_vec[i_pos]
+        patt_pos <- which(txt_vec == patt)
+        res_pos <- patt_pos[patt_pos %in% (res_pos + i_pos - 1)] - i_pos + 1
+    }
+    return(res_pos)
+}
+
+
 # get tables from doc ==========================================================
 getTableFromDoc <- function(word_doc) {
     
@@ -333,10 +352,7 @@ getTableFromDoc <- function(word_doc) {
     
     # find FIB in binary doc (starts with 0xA5EC, 1472 bytes length)
     # source: http://b2xtranslator.sourceforge.net/howtos/How_to_retrieve_text_from_a_binary_doc_file.pdf
-    pos_1b <- which(doc_bin == "a5")
-    pos_2b <- which(doc_bin == "ec")
-    # little endian encoding means than bytes go in reverse order
-    FIB_base_pos <- pos_2b[pos_2b %in% (pos_1b - 1)]
+    FIB_base_pos <- findSeqPos(rev(c("a5", "ec")), doc_bin)
     # FIB base length is 32 bytes
     FIB_base <- doc_bin[FIB_base_pos:(FIB_base_pos + 32 - 1)]
     
@@ -347,44 +363,55 @@ getTableFromDoc <- function(word_doc) {
     cbRgFcLcbs <- c("005d", "006c", "0088", "00a4", "00b7")
     cbRgFcLcb <- cbRgFcLcbs[nFibs == as.numeric(nFIB)]
     
-    # extract FibRgFcLcb -- part of the FIB
-    pos_1b <- which(doc_bin == substr(cbRgFcLcb, 3, 4))
-    pos_2b <- which(doc_bin == substr(cbRgFcLcb, 1, 2))
-    cbRgFcLcb_pos <- pos_2b[pos_2b %in% (pos_1b - 1)]
+    # extract FibRgFcLcb block of FIB
+    cbRgFcLcb_pos <- findSeqPos(c(substr(cbRgFcLcb, 3, 4), 
+                                  substr(cbRgFcLcb, 1, 2)), doc_bin)
     cbRgFcLcb_pos <- cbRgFcLcb_pos[cbRgFcLcb_pos > (FIB_base_pos + 32)][1]
-    FibRgFcLcb <- doc_bin[(cbRgFcLcb_pos + 2):(cbRgFcLcb_pos + 2 - 1 +
-                                                   as.numeric(paste0("0x", cbRgFcLcb)))]
     
-    pos_1b <- which(doc_bin == "00")
-    pos_2b <- which(doc_bin == "16")
-    cslw_pos <- pos_2b[pos_2b %in% (pos_1b - 1)]
+    #! debug
+    doc_bin[cbRgFcLcb_pos:(cbRgFcLcb_pos + 1)]
+    tmp <- doc_bin[(cbRgFcLcb_pos + 2):(cbRgFcLcb_pos + 2 + (68 - 1) * 4 + 4 - 1)]
+    tmp <- matrix(tmp, length(tmp) / 4, 4, byrow = T)
+    tmp
+    
+    # here we find piece table position and length in xTable stream
+    fcClx_bytes_pos <- (cbRgFcLcb_pos + 2 + (67 - 1) * 4)
+    fcClx <- as.numeric(paste0("0x", paste0(rev(doc_bin[fcClx_bytes_pos:(fcClx_bytes_pos + 4 - 1)]),
+                                            collapse = "")))
+    lcbClx_bytes_pos <- (cbRgFcLcb_pos + 2 + (68 - 1) * 4)
+    lcbClx <- as.numeric(paste0("0x", paste0(rev(doc_bin[lcbClx_bytes_pos:(lcbClx_bytes_pos + 4 - 1)]),
+                                             collapse = "")))
+
+    # extract FibRgLw97 block of FIB, preceed by cslw = 0x0016
+    cslw_pos <- findSeqPos(rev(c("00", "16")), doc_bin)
     cslw_pos <- cslw_pos[cslw_pos > (FIB_base_pos + 32)][1]
     FibRgLw97 <- doc_bin[(cslw_pos + 2):(cslw_pos + 2 + 88 - 1)]
     
-    # number of CPs in the main document
+    #! debug
+    doc_bin[cslw_pos:(cslw_pos + 1)]
+    
+    # here we find a lot of counts for doc element (just in case): 
+    #   1. number of CPs in the main document
     ccpText <- as.numeric(paste0("0x", paste0(rev(FibRgLw97[13:16]), 
                                               collapse = "")))
-    # number of CPs in the footnote subdocument
+    #   2. number of CPs in the footnote subdocument
     ccpFtn <- as.numeric(paste0("0x", paste0(rev(FibRgLw97[17:20]), 
                                              collapse = "")))
-    # number of CPs in the header subdocument
+    #   3. number of CPs in the header subdocument
     ccpHdd <- as.numeric(paste0("0x", paste0(rev(FibRgLw97[21:24]), 
                                              collapse = "")))
-    # number of CPs in the comment subdocument
+    #   4. number of CPs in the comment subdocument
     ccpAtn <- as.numeric(paste0("0x", paste0(rev(FibRgLw97[29:32]), 
                                              collapse = "")))
-    # number of CPs in the endnote subdocument
+    #   5. number of CPs in the endnote subdocument
     ccpEdn <- as.numeric(paste0("0x", paste0(rev(FibRgLw97[33:36]), 
                                              collapse = "")))
-    # number of CPs in the textbox subdocument of the main document
+    #   6. number of CPs in the textbox subdocument of the main document
     ccpTxbx <- as.numeric(paste0("0x", paste0(rev(FibRgLw97[37:40]), 
                                              collapse = "")))
-    # number of CPs in the textbox subdocument of the header
+    #   7. number of CPs in the textbox subdocument of the header
     ccpHdrTxbx <- as.numeric(paste0("0x", paste0(rev(FibRgLw97[41:44]), 
                                               collapse = "")))
-    
-    
-    
     
     # searching for a piece table
     # 16 bitsat position 0x000A sets a name of file stream
@@ -394,16 +421,23 @@ getTableFromDoc <- function(word_doc) {
     } else {
         table_stream_name <- "0Table"
     }
-    #  read file character position (FC), 32 bytes long, at offset 0x01A6
-    pos <- 0x01A6 + 1
-    table_pos <- hex2dec(paste0("0x", paste0(rev(FIB_base[pos:(pos + 3)]),
-                                             collapse = "")))
-    #  read length of the table (lcb), 32 bytes long, at offset 0x01A2
-    pos <- 0x01A2 + 1
-    table_len <- hex2dec(paste0("0x", paste0(rev(FIB_base[pos:(pos + 3)]),
-                                             collapse = "")))
+    
+    table_stream_name_bytes <- 
+        sapply(seq(1, nchar(table_stream_name)), 
+               function(x) format(as.hexmode(as.character(charToRaw(substr(table_stream_name, x, x)))), width = 4))
+   
+    table_stream_name_bytes <- c(sapply(table_stream_name_bytes, function(x) {
+        x <- c(substr(x, 3, 4), substr(x, 1, 2))
+    }))
+    
+    xTable_pos <- findSeqPos(table_stream_name_bytes, doc_bin)
+    
     # read table file stream
-    xTable <- doc_bin[table_pos:(table_pos + table_len - 1)]
+    xTable <- doc_bin[xTable_pos:length(doc_bin)]
+    
+    # read Clx
+    xTable[fcClx:fcClx + 4]
+    
     
     i_pos <- 1
     pos_of_02 <- which(xTable[i_pos:table_len] == 2)[1]
