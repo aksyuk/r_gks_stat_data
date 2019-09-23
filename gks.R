@@ -376,10 +376,15 @@ getTableFromDoc <- function(word_doc) {
     FIB_base_pos <- findSeqPos(rev(c("a5", "ec")), doc_bin)
     # FIB base length is 32 bytes
     FIB_base <- doc_bin[FIB_base_pos:(FIB_base_pos + 32 - 1)]
+    FIB <- doc_bin[FIB_base_pos:(FIB_base_pos + 1472 - 1)]
+    FIB[c(hex2dec(0x01A2), hex2dec(0x01A2) - 1)]
+    FIB[c(hex2dec(0x01A6), hex2dec(0x01A6) - 1)]
+    FIB[c(hex2dec(0x000A), hex2dec(0x000A) - 1)]
     
-    # extract nFIB, 2 bytes after FIB start
+    # Table1 or Table0? extract nFIB, 2 bytes after FIB start
     nFIB <- paste0("0x", paste0(rev(doc_bin[(FIB_base_pos + 2):(FIB_base_pos + 3)]), 
                                 collapse = ""))
+    
     nFibs <- c(0x00c1, 0x00d9, 0x0101, 0x010c, 0x0112)
     cbRgFcLcbs <- c("005d", "006c", "0088", "00a4", "00b7")
     cbRgFcLcb <- cbRgFcLcbs[nFibs == as.numeric(nFIB)]
