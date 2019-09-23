@@ -11,7 +11,7 @@ require("xml2")                   # parsing docx
 require("tools")                  # file_ext()
 library("broman")                 # hex to decimal convertion
 library("BMS")                    # hex to binary convertion: hex2bin()
-library('downloader')
+# library('downloader')
 
 # init -------------------------------------------------------------------------
 # url of the data host
@@ -25,22 +25,37 @@ index_web_page <-
 html <- getURL(index_web_page, .encoding = "UTF-8")
 doc <- htmlTreeParse(html, useInternalNodes = T, encoding = 'UTF-8')
 rootNode <- xmlRoot(doc)
-xpath_pattern_year_curr <- "//h2[contains(., 'WEB')]"
-"//div[@class='document-list__item-desc']/div[@class='document-list__item-title']"
 
-xpathSApply(rootNode, xpath_pattern_year_curr, xmlValue)
-
+# this year data
+#  year
+src.str <- 'WEB-доступ'
+src.str <- iconv(src.str, from = 'cp1251', to = 'UTF-8')
+xpath_pattern_year_curr <- paste0("//h2[contains(., '", src.str, "')]/parent::div/parent::div/following-sibling::div//div[@class='document-list__item-title']")
+years_v <- xpathSApply(rootNode, xpath_pattern_year_curr, xmlValue)
 years_v <- gsub('[^0-9]', '', years_v)
-
-xpath_pattern_db <- "//div[@class='document-list__item-links']//a[contains(., 'WEB')]"
-db_urls <- xpathSApply(rootNode, xpath_pattern_db, xmlGetAttr, "href")
+#  href to database
+xpath_pattern_db_curr <- paste0("//h2[contains(., '", src.str, "')]/parent::div/parent::div/following-sibling::div//a[@class='btn btn-icon btn-white btn-br btn-sm']")
+db_urls <- xpathSApply(rootNode, xpath_pattern_db_curr, xmlGetAttr, "href")
+    
+# previous years
+#  year
+src.str <- 'Выпуски прошлых лет'
+src.str <- iconv(src.str, from = 'cp1251', to = 'UTF-8')
+xpath_pattern_year_prev <- paste0("//h2[contains(., '", src.str, "')]/parent::div/parent::div/parent::div//div[@class='document-list__item-title']")
+years_v <- c(years_v, xpathSApply(rootNode, xpath_pattern_year_prev, xmlValue))
+years_v <- gsub('[^0-9]', '', years_v)
+#  href to database
+xpath_pattern_db_prev <- paste0("//h2[contains(., '", src.str, "')]/parent::div/parent::div/parent::div//a[contains(., 'WEB')]")
+db_urls <- c(db_urls, xpathSApply(rootNode, xpath_pattern_db_prev, xmlGetAttr, "href"))
 
 # index of databases by year
 glb_years <- data.frame(years_v, db_paths = db_urls[1:length(years_v)],
                         stringsAsFactors = F)
+glb_years <- na.omit(glb_years)
 
 # remove temp objects
-rm(html, doc, rootNode, xpath_pattern, years_v, db_urls)
+rm(html, doc, rootNode, xpath_pattern_year_curr, xpath_pattern_year_prev, 
+   xpath_pattern_db_curr, xpath_pattern_db_prev, years_v, db_urls)
 
 
 # functions --------------------------------------------------------------------
@@ -526,25 +541,34 @@ loadGKSData <- function(ref){
     ext <- file_ext(ref)
     switch(ext,
            doc = {
-               # ref url points to docx file
-               print("Неподдерживаемый тип источника")
-               # cat(green("Читаю данные из файла .doc...\n"))
-               # getTableFromDoc(ref)
+               # ref url points to doc file
+               cat(green("Скачиваю файл .doc...\n"))
+               doc.flnm <- './temp.doc'
+               download.file(ref, destfile = doc.flnm, method = 'curl')
+               # wd <- gsub('/', '\\\\', getwd())
+               # system(paste0('convertdoc-tohtml.ps1 -docpath ',
+               #               wd, ' -htmlpath ', wd))
+               # cat(green("Читаю данные из файла .docx...\n"))
+               # getTableFromDocx(doc)
            },
+           
            # ref url points to docx file
            docx = {
                cat(green("Читаю данные из файла .docx...\n"))
                getTableFromDocx(ref)
            },
+           
            # ref url points to html file
            html = {
                cat(green("Читаю данные с веб-страницы...\n"))
                getTableFromHtm(ref)
            },
+           
            htm = {
                cat(green("Читаю данные с веб-страницы...\n"))
                getTableFromHtm(ref)
            },
+           
            # other extention
            stop(paste0("Неизвестный формат файла: ", ext))
     )
@@ -552,7 +576,7 @@ loadGKSData <- function(ref){
 
 # dialog with user and return reference to needed stat doc =====================
 getGKSDataRef <- function() {
-    params <- "/?List&Id="
+    params <- "?List&Id="
     id <- -1
     
     # ask user to choose a year
@@ -566,7 +590,9 @@ getGKSDataRef <- function() {
     # go through tree until we got a link to doc instead of id in stat db
     while (TRUE) {
         url <- paste(db_path, params, id, sep = "")
-        xml <- xmlTreeParse(url, useInternalNodes = T)
+        url <- gsub('http:', 'https:', url)
+        xml <- getURL(url, .encoding = "cp-1251")
+        xml <- xmlTreeParse(xml, useInternalNodes = T)
         names <- xpathSApply(xml, "//name", xmlValue)
         Encoding(names) <- "UTF-8" 
         refs <- xpathSApply(xml, "//ref", xmlValue)
@@ -578,7 +604,7 @@ getGKSDataRef <- function() {
         
         # ask user to select an option number
         num <- as.numeric(readline(prompt = "Введите номер раздела (Esc для выхода): "))
-        current_selection_string <- paste0(current_selection_string, " -> ", 
+        current_selection_string <- paste0(current_selection_string, " >> ", 
                                            names[num])
         cat(green(paste0(current_selection_string, "\n")))
         ref <- refs[as.numeric(num)]
@@ -588,6 +614,7 @@ getGKSDataRef <- function() {
             # preface has an artifact in url
             ref <- gsub("[/]%3Cextid%3E[/]%3Cstoragepath%3E::[|]", "", ref)
             ref <- paste0(glb_host_name, ref)
+            ref <- gsub('http:', 'https:', ref)
             cat(blue(paste0(ref, "\n")))
             return(ref)
         }

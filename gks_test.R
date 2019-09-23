@@ -70,7 +70,7 @@ glb_dataGKS <- loadGKSData(my_url)
 
 
 # select data to load ----------------------------------------------------------
-getGKSDataRef()
+loadGKSData(getGKSDataRef())
 
 
 
