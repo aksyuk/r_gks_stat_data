@@ -24,9 +24,44 @@ index_web_page <-
 html <- getURL(index_web_page)
 doc <- htmlTreeParse(html, useInternalNodes = T)
 rootNode <- xmlRoot(doc)
-xpath_pattern <- "//div[@class='toggle-section-open']//div[contains('Регионы России. Социально-экономические показатели')]"
+xpath_pattern <- "//div[contains(text(), 'Социально-экономические показатели')]"
+xpath_pattern <- "//div[@class='document-list__item-title']"
 
 years_v <- xpathSApply(rootNode, xpath_pattern, xmlValue)
+years_v[1]
+x <- gsub('[\u008b]|[\u0081]|[\u0086]|[\u0087]|[\u008c]|[\u008d]|[\u0082]', 
+          '', years_v[1])
+x
+Encoding(x) <- 'CP1251'
+x
+
+for (j in 1:length(stri_enc_list())) {
+    loop.enc <- stri_enc_list()[[j]]
+    
+    Sys.sleep(3)
+    cat(green(paste0(names(stri_enc_list())[j], "\r\n")))
+    
+    for (i in 1:length(loop.enc)) {
+        x <- years_v
+        Encoding(x) <- loop.enc[i]
+        
+        cat(yellow(paste0(loop.enc[i], "\r\n")))
+        print(x[1])
+    }
+}
+
+
+years_v[1]
+
+
+Encoding(years_v) <- 'cp1251'
+as_utf8(years_v)[1]
+years_v[1]
+
+iconv(years_v, from = Encoding(years_v)[1], to = "CP1252", sub = "byte")
+years_v
+
+
 years_v <- years_v[nchar(years_v) == 4]
 db_urls <- xpathSApply(rootNode, paste0(xpath_pattern, "/a"), xmlGetAttr, "href")
 
