@@ -8,7 +8,7 @@ require("crayon")                 # colored console messages
 require("RCurl")                  # loading URLs
 require("XML")                    # parsing html
 require("xml2")                   # parsing docx
-# require("tools")                  # 
+require("tools")                  # file_ext()
 library("broman")                 # hex to decimal convertion
 library("BMS")                    # hex to binary convertion: hex2bin()
 
@@ -20,11 +20,12 @@ glb_dataGKS <- NULL
 
 # get all stat years and path to it's db
 index_web_page <- 
-    "http://www.gks.ru/wps/wcm/connect/rosstat_main/rosstat/ru/statistics/publications/catalog/doc_1138623506156"
+    "https://www.gks.ru/folder/210/document/13204"
 html <- getURL(index_web_page)
 doc <- htmlTreeParse(html, useInternalNodes = T)
 rootNode <- xmlRoot(doc)
-xpath_pattern <- "//tbody/tr/td"
+xpath_pattern <- "//div[@class='toggle-section-open']//div[contains('Регионы России. Социально-экономические показатели')]"
+
 years_v <- xpathSApply(rootNode, xpath_pattern, xmlValue)
 years_v <- years_v[nchar(years_v) == 4]
 db_urls <- xpathSApply(rootNode, paste0(xpath_pattern, "/a"), xmlGetAttr, "href")

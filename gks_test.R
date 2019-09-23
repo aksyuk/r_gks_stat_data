@@ -68,3 +68,13 @@ my_url <- "http://www.gks.ru/bgd/regl/B15_14p/IssWWW.exe/Stg/d02/10-01.doc"
 my_url <- "http://www.gks.ru/bgd/regl/B17_14p/IssWWW.exe/Stg/d01/04-05.doc"
 glb_dataGKS <- loadGKSData(my_url)
 
+
+# select data to load ----------------------------------------------------------
+getGKSDataRef()
+
+
+
+
+
+
+
